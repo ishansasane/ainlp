@@ -1,0 +1,3 @@
+Natural Language Processing (NLP) is a field of Artificial Intelligence. 
+It helps computers understand human language! NLP includes tokenization, 
+stemming, lemmatization, and more.
