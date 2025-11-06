@@ -1,0 +1,109 @@
+class GoalStackPlanner:
+    def __init__(self, initial, goal, actions):
+        self.state = set(initial)
+        self.goal = list(goal)
+        self.actions = actions
+        # initialize stack with top = last element of goal list
+        self.stack = list(reversed(self.goal))
+        self.plan = []
+
+    def is_satisfied(self, fact):
+        return fact in self.state
+
+    def apply_action(self, action):
+        for d in action["delete"]:
+            self.state.discard(d)
+        for a in action["add"]:
+            self.state.add(a)
+        self.plan.append(action["name"])
+
+    def find_action_for(self, fact):
+        for a in self.actions:
+            if fact in a["add"]:
+                return a
+        return None
+
+    def plan_steps(self):
+        while self.stack:
+            top = self.stack.pop()
+            # If top is a goal/fact (string)
+            if isinstance(top, str):
+                if not self.is_satisfied(top):
+                    action = self.find_action_for(top)
+                    if action is None:
+                        raise ValueError(f"No action can achieve goal: {top}")
+                    # push the action and then its preconditions (preconditions should be satisfied first)
+                    self.stack.append(action)
+                    for p in reversed(action["preconditions"]):
+                        if not self.is_satisfied(p):
+                            self.stack.append(p)
+                # else: goal already satisfied -> continue
+            else:
+                # top is an action (dict)
+                missing = [p for p in top["preconditions"] if not self.is_satisfied(p)]
+                if not missing:
+                    # all preconditions satisfied -> apply action
+                    self.apply_action(top)
+                else:
+                    # push the action back, then push missing preconditions
+                    self.stack.append(top)
+                    for p in reversed(missing):
+                        self.stack.append(p)
+        return self.plan
+
+
+# --- Action templates for Block World ---
+def pickup(x):
+    return {
+        "name": f"PickUp({x})",
+        "preconditions": [f"OnTable({x})", f"Clear({x})", "ArmEmpty"],
+        "add": [f"Holding({x})"],
+        "delete": [f"OnTable({x})", "ArmEmpty"]
+    }
+
+def putdown(x):
+    return {
+        "name": f"PutDown({x})",
+        "preconditions": [f"Holding({x})"],
+        "add": [f"OnTable({x})", f"Clear({x})", "ArmEmpty"],
+        "delete": [f"Holding({x})"]
+    }
+
+def stack(x, y):
+    return {
+        "name": f"Stack({x},{y})",
+        "preconditions": [f"Holding({x})", f"Clear({y})"],
+        "add": [f"On({x},{y})", f"Clear({x})", "ArmEmpty"],
+        "delete": [f"Holding({x})", f"Clear({y})"]
+    }
+
+def unstack(x, y):
+    return {
+        "name": f"UnStack({x},{y})",
+        "preconditions": [f"On({x},{y})", f"Clear({x})", "ArmEmpty"],
+        "add": [f"Holding({x})", f"Clear({y})"],
+        "delete": [f"On({x},{y})", "ArmEmpty"]
+    }
+
+
+# --- Example: initial state and goal ---
+initial = [
+    "OnTable(A)", "OnTable(B)", "OnTable(C)",
+    "Clear(A)", "Clear(B)", "Clear(C)", "ArmEmpty"
+]
+goal = ["On(C,B)", "On(B,A)"]
+
+actions = [
+    pickup("A"), pickup("B"), pickup("C"),
+    putdown("A"), putdown("B"), putdown("C"),
+    stack("A","B"), stack("A","C"),
+    stack("B","A"), stack("B","C"),
+    stack("C","A"), stack("C","B"),
+    unstack("A","B"), unstack("B","A"),
+    unstack("C","A"), unstack("C","B")
+]
+
+if __name__ == "__main__":
+    planner = GoalStackPlanner(initial, goal, actions)
+    plan = planner.plan_steps()
+    print("Plan:", plan)
